@@ -11,7 +11,7 @@
   --color-bg-secondary: #18181b;
   --color-bg-tertiary: #27272a;
 
-  /* Accent - Subtle Warm Gold */
+  /* Global Accent */
   --color-accent: #d4a574;
   --color-accent-muted: #a78b6b;
 
@@ -23,6 +23,46 @@
   /* Borders */
   --color-border: #27272a;
   --color-border-hover: #3f3f46;
+
+  /* --- STUDIO THEME (Industrial/Tech) --- */
+  --color-studio-bg: #000000;
+  --color-studio-panel: #0d0d0d;
+  --color-studio-accent: #d9e021;
+  --color-studio-border: #222222;
+
+  /* --- DASHBOARD THEME (Vintage/Sepia) --- */
+  --color-dash-bg: #0a0a0a;
+  --color-dash-card: #111111;
+  --color-dash-border: #333333;
+  --color-dash-text-main: #eeeeee;
+  --color-dash-primary: #d4c5a9;
+  /* Vintage Cream */
+  --color-dash-dim: #8c8270;
+  --color-dash-sepia: #b3a07e;
+
+  /* --- TERMINAL THEME (Cyberpunk) --- */
+  --color-term-bg: #050505;
+  --color-term-surface: #0a0a0a;
+  --color-term-border: #262626;
+  --color-term-text: #a3a3a3;
+  --color-term-accent: #d97706;
+  /* Amber */
+  --color-term-bright: #f59e0b;
+
+  /* --- GALLERY THEME (Minimal) --- */
+  --color-gallery-bg: #121212;
+  --color-gallery-card: #1a1a1a;
+  --color-gallery-text: #e0e0e0;
+  --color-gallery-secondary: #888888;
+
+  /* --- FONTS --- */
+  --font-display: "Space Grotesk", sans-serif;
+  --font-body: "Noto Sans", sans-serif;
+  --font-serif: "Cormorant Garamond", serif;
+  --font-mono: "Space Mono", monospace;
+  --font-terminal: "Courier Prime", monospace;
+  --font-elegant: "Playfair Display", serif;
+  --font-reading: "Lora", serif;
 }
 
 /* =============================================
@@ -347,4 +387,56 @@
 .bg-noise {
   background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 400 400' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noiseFilter'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noiseFilter)'/%3E%3C/svg%3E");
   opacity: 0.03;
+}
+
+/* Vintage Overlay */
+.vintage-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+  background: radial-gradient(circle, rgba(0, 0, 0, 0) 50%, rgba(0, 0, 0, 0.4) 100%);
+  z-index: 40;
+}
+
+/* Scanline Effect */
+.scanline {
+  width: 100%;
+  height: 1px;
+  background: rgba(255, 255, 255, 0.03);
+  position: fixed;
+  animation: scanline 8s linear infinite;
+  z-index: 45;
+  pointer-events: none;
+}
+
+/* Grain Effect */
+.bg-grain {
+  background-image: url("data:image/svg+xml,%3Csvg viewBox=%220 0 200 200%22 xmlns=%22http://www.w3.org/2000/svg%22%3E%3Cfilter id=%22noiseFilter%22%3E%3CfeTurbulence type=%22fractalNoise%22 baseFrequency=%220.9%22 numOctaves=%223%22 stitchTiles=%22stitch%22/%3E%3C/filter%3E%3Crect width=%22100%25%22 height=%22100%25%22 filter=%22url(%23noiseFilter)%22 opacity=%220.08%22/%3E%3C/svg%3E");
+}
+
+/* CRT Overlay for Terminal */
+.crt-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: linear-gradient(rgba(18, 16, 16, 0) 50%, rgba(0, 0, 0, 0.1) 50%), linear-gradient(90deg, rgba(255, 0, 0, 0.03), rgba(0, 255, 0, 0.01), rgba(0, 0, 255, 0.03));
+  background-size: 100% 3px, 3px 100%;
+  pointer-events: none;
+  z-index: 50;
+  opacity: 0.6;
+}
+
+@keyframes scanline {
+  0% {
+    top: 0%;
+  }
+
+  100% {
+    top: 100%;
+  }
 }

@@ -135,6 +135,8 @@ export async function generateImage(
                             hasCompleted = true;
 
                             const outputData = message.output?.data;
+                            log('info', 'Raw output data:', JSON.stringify(outputData));
+
                             if (outputData) {
                                 let imageUrl = extractImageUrl(outputData);
 
@@ -198,27 +200,61 @@ export async function generateImage(
 }
 
 function extractImageUrl(outputData: any[]): string | null {
-    for (const item of outputData) {
-        if (!item) continue;
+    // Based on webui.py generate_clicked function:
+    // outputs=[progress_html, progress_window, progress_gallery, gallery]
+    // The gallery is at index 3 (4th output)
 
-        if (typeof item === 'string' && item.startsWith('data:image')) {
-            return item;
-        }
+    log('info', `Output data length: ${outputData?.length}`);
 
-        if (Array.isArray(item)) {
-            for (const subItem of item) {
-                if (typeof subItem === 'string') {
-                    if (subItem.startsWith('data:image')) return subItem;
-                    if (subItem.includes('/')) return `${API_BASE}/file=${subItem}`;
-                }
-                if (subItem?.name) return `${API_BASE}/file=${subItem.name}`;
-            }
-        }
-
-        if (item.name) return `${API_BASE}/file=${item.name}`;
-        if (item.path) return `${API_BASE}/file=${item.path}`;
+    if (!outputData || outputData.length < 4) {
+        log('warning', 'Output data array too short');
+        return null;
     }
 
+    const galleryData = outputData[3];
+    log('info', `Gallery data type: ${typeof galleryData}, isArray: ${Array.isArray(galleryData)}`);
+
+    if (!galleryData) {
+        log('warning', 'Gallery data is null/undefined');
+        return null;
+    }
+
+    // Gallery data can be:
+    // 1. An array of file paths (strings)
+    // 2. An array of objects with {name: path} or {path: path}
+    // 3. An array of objects with {image: {path: ...}}
+
+    if (Array.isArray(galleryData)) {
+        log('info', `Gallery array length: ${galleryData.length}`);
+
+        if (galleryData.length === 0) {
+            log('warning', 'Gallery array is empty');
+            return null;
+        }
+
+        const firstItem = galleryData[0];
+        log('info', `First gallery item type: ${typeof firstItem}, value: ${JSON.stringify(firstItem)?.substring(0, 200)}`);
+
+        // Case 1: Direct string path
+        if (typeof firstItem === 'string') {
+            if (firstItem.startsWith('data:image')) {
+                return firstItem;
+            }
+            // File path - convert to Gradio file URL
+            return `${API_BASE}/file=${firstItem}`;
+        }
+
+        // Case 2: Object with name/path property
+        if (typeof firstItem === 'object' && firstItem !== null) {
+            const path = firstItem.name || firstItem.path || firstItem.image?.path || firstItem.image?.name;
+            if (path) {
+                log('success', `Found image path: ${path}`);
+                return `${API_BASE}/file=${path}`;
+            }
+        }
+    }
+
+    log('warning', 'Could not extract image from gallery data');
     return null;
 }
 
@@ -298,26 +334,24 @@ function buildGenerateData(params: GenerateParams): any[] {
 
     // Line 996: inpaint_ctrls (multiple items for inpaint settings)
     // Based on typical Fooocus setup: inpaint_mode, disable_initial_latent, engine, strength, respective_field, etc.
-    data.push('Disabled'); // inpaint_mode - 70
-    data.push(false); // inpaint_disable_initial_latent - 71
-    data.push('v2.6'); // inpaint_engine - 72
-    data.push(1.0); // inpaint_strength - 73
-    data.push(0.618); // inpaint_respective_field - 74
-    data.push('u2net'); // inpaint_mask_model - 75
-    data.push('full'); // inpaint_mask_cloth_category - 76
-    data.push(''); // inpaint_mask_dino_prompt_text - 77
-    data.push('vit_b'); // inpaint_mask_sam_model - 78
-    data.push(0.3); // inpaint_mask_box_threshold - 79
-    data.push(0.25); // inpaint_mask_text_threshold - 80
-    data.push(0); // inpaint_mask_sam_max_detections - 81
-    data.push(false); // invert_mask_checkbox - 82
+    // Line 996: inpaint_ctrls (8 items)
+    // [debugging_inpaint_preprocessor, inpaint_disable_initial_latent, inpaint_engine, 
+    //  inpaint_strength, inpaint_respective_field, inpaint_advanced_masking_checkbox, invert_mask_checkbox, inpaint_erode_or_dilate]
+    data.push(false); // debugging_inpaint_preprocessor
+    data.push(false); // inpaint_disable_initial_latent
+    data.push('v2.6'); // inpaint_engine
+    data.push(1.0); // inpaint_strength
+    data.push(0.618); // inpaint_respective_field
+    data.push(false); // inpaint_advanced_masking_checkbox
+    data.push(false); // invert_mask_checkbox
+    data.push(0); // inpaint_erode_or_dilate
 
     // Line 998-999: save_final_enhanced_image_only (if not disable_image_log)
     data.push(false); // save_final_enhanced_image_only - 83
 
     // Line 1001-1002: save_metadata_to_images, metadata_scheme (if not disable_metadata)
     data.push(false); // save_metadata_to_images - 84
-    data.push('fooocus'); // metadata_scheme - 85 (THIS WAS THE ISSUE!)
+    data.push('fooocus'); // metadata_scheme - 85
 
     // Line 1004: ip_ctrls (Image Prompt controls - 4 IP adapters x 4 params each = 16 items)
     for (let i = 0; i < 4; i++) {
@@ -340,23 +374,24 @@ function buildGenerateData(params: GenerateParams): any[] {
     data.push('Before First Enhancement'); // enhance_uov_processing_order - 108
     data.push('Original Prompts'); // enhance_uov_prompt_type - 109
 
-    // Line 1008: enhance_ctrls (3 enhance tabs x 14 params each = 42 items)
+    // Line 1008: enhance_ctrls (3 enhance tabs x 16 params each = 48 items)
     for (let i = 0; i < 3; i++) {
         data.push(false); // enhance_enabled
+        data.push(''); // enhance_mask_dino_prompt_text
         data.push(''); // enhance_prompt
         data.push(''); // enhance_negative_prompt
-        data.push(''); // enhance_mask_dino_prompt
-        data.push('Disabled'); // enhance_mask_model
-        data.push('u2net'); // enhance_sam_model
-        data.push('full'); // enhance_cloth_category
-        data.push(0.3); // enhance_box_threshold
-        data.push(0.25); // enhance_text_threshold
-        data.push(0); // enhance_sam_max_detections
-        data.push(false); // enhance_invert_mask
-        data.push('None'); // enhance_inpaint_engine_state
+        data.push('u2net'); // enhance_mask_model
+        data.push('full'); // enhance_mask_cloth_category
+        data.push('vit_b'); // enhance_mask_sam_model
+        data.push(0.25); // enhance_mask_text_threshold
+        data.push(0.3); // enhance_mask_box_threshold
+        data.push(0); // enhance_mask_sam_max_detections
+        data.push(false); // enhance_inpaint_disable_initial_latent
+        data.push('None'); // enhance_inpaint_engine
         data.push(1.0); // enhance_inpaint_strength
         data.push(0.618); // enhance_inpaint_respective_field
-        data.push(false); // enhance_inpaint_erode_or_dilate
+        data.push(0); // enhance_inpaint_erode_or_dilate
+        data.push(false); // enhance_mask_invert
     }
 
     log('info', `Built data array with ${data.length} elements`);
