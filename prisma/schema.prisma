@@ -1,0 +1,203 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum ImageStatus {
+  PENDING
+  GENERATING
+  COMPLETED
+  FAILED
+}
+
+enum PostStatus {
+  DRAFT
+  SCHEDULED
+  PUBLISHED
+  FAILED
+}model User {
+  id        String   @id @default(cuid())
+  email     String   @unique
+  name      String?
+  avatarUrl String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  accounts          Account[]
+  sessions          Session[]
+  influencerProfiles InfluencerProfile[]
+}
+
+model Account {
+  id                String  @id @default(cuid())
+  userId            String
+  type              String
+  provider          String
+  providerAccountId String
+  refresh_token     String?
+  access_token      String?
+  expires_at        Int?
+  token_type        String?
+  scope             String?
+  id_token          String?
+  session_state     String?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+}
+
+model Session {
+  id           String   @id @default(cuid())
+  sessionToken String   @unique
+  userId       String
+  expires      DateTime
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model InfluencerProfile {
+  id               String   @id @default(cuid())
+  userId           String
+  name             String
+  bio              String?
+  instagramHandle  String?
+  instagramUserId  String?
+  accessToken      String?
+  refreshToken     String?
+  tokenExpiresAt   DateTime?
+  avatarUrl        String?
+  metadata         Json?
+  createdAt        DateTime @default(now())
+
+  user             User              @relation(fields: [userId], references: [id], onDelete: Cascade)
+  generatedImages  GeneratedImage[]
+  postBundles      PostBundle[]
+  scheduledPosts   ScheduledPost[]
+  llmPrompts       LlmPrompt[]
+  analyticsSnapshots AnalyticsSnapshot[]
+}
+
+
+
+model GeneratedImage {
+  id                String      @id @default(cuid())
+  influencerId      String
+  prompt            String
+  negativePrompt    String?
+  seed              BigInt
+  aspectRatio       String
+  styleAdapters     Json?
+  imageUrl          String
+  thumbnailUrl      String?
+  width             Int
+  height            Int
+  fileSize          BigInt?
+  generationTimeMs  Int?
+  status            ImageStatus @default(PENDING)
+  errorMessage      String?
+  metadata          Json?
+  createdAt         DateTime    @default(now())
+
+  influencer        InfluencerProfile @relation(fields: [influencerId], references: [id], onDelete: Cascade)
+  bundleImages      BundleImage[]
+  scheduledPosts    ScheduledPost[]
+
+  @@index([influencerId, createdAt])
+  @@index([status])
+}
+
+model PostBundle {
+  id           String   @id @default(cuid())
+  influencerId String
+  title        String
+  description  String?
+  tags         String[]
+  createdAt    DateTime @default(now())
+
+  influencer   InfluencerProfile @relation(fields: [influencerId], references: [id], onDelete: Cascade)
+  bundleImages BundleImage[]
+
+  @@index([influencerId])
+}
+
+model BundleImage {
+  id       String @id @default(cuid())
+  bundleId String
+  imageId  String
+  order    Int
+
+  bundle PostBundle     @relation(fields: [bundleId], references: [id], onDelete: Cascade)
+  image  GeneratedImage @relation(fields: [imageId], references: [id], onDelete: Cascade)
+
+  @@unique([bundleId, imageId])
+}
+
+
+
+model ScheduledPost {
+  id              String     @id @default(cuid())
+  influencerId    String
+  imageId         String
+  caption         String
+  hashtags        String[]
+  scheduledTime   DateTime
+  status          PostStatus @default(DRAFT)
+  instagramPostId String?
+  publishedAt     DateTime?
+  errorMessage    String?
+  metadata        Json?
+  createdAt       DateTime   @default(now())
+  updatedAt       DateTime   @updatedAt
+
+  influencer InfluencerProfile @relation(fields: [influencerId], references: [id], onDelete: Cascade)
+  image      GeneratedImage    @relation(fields: [imageId], references: [id], onDelete: Cascade)
+  analytics  AnalyticsSnapshot[]
+
+  @@index([influencerId, scheduledTime])
+  @@index([status])
+}
+
+model AnalyticsSnapshot {
+  id             String   @id @default(cuid())
+  influencerId   String
+  postId         String?
+  snapshotDate   DateTime @default(now())
+  followersCount Int?
+  followingCount Int?
+  postsCount     Int?
+  engagementRate Decimal?
+  likesTotal     Int?
+  commentsTotal  Int?
+  sharesTotal    Int?
+  reach          Int?
+  impressions    Int?
+  metadata       Json?
+  createdAt      DateTime @default(now())
+
+  influencer InfluencerProfile @relation(fields: [influencerId], references: [id], onDelete: Cascade)
+  post       ScheduledPost?    @relation(fields: [postId], references: [id], onDelete: SetNull)
+
+  @@index([influencerId, snapshotDate])
+  @@index([postId])
+}
+
+model LlmPrompt {
+  id             String   @id @default(cuid())
+  influencerId   String
+  context        String?
+  basePrompt     String
+  logicGates     Json?
+  compiledPrompt String
+  isTemplate     Boolean  @default(false)
+  usageCount     Int      @default(0)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  influencer InfluencerProfile @relation(fields: [influencerId], references: [id], onDelete: Cascade)
+
+  @@index([influencerId, isTemplate])
+}
