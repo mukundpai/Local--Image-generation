@@ -61,6 +61,40 @@ export interface GenerateParams {
     style?: string;
     aspectRatio?: string;
     seed?: number;
+
+    // Advanced settings
+    performance?: 'Speed' | 'Quality' | 'Extreme Speed';
+    imageNumber?: number;
+    outputFormat?: 'png' | 'jpg' | 'webp';
+    sharpness?: number;
+    guidanceScale?: number;
+
+    // Model settings
+    baseModel?: string;
+    refinerModel?: string;
+    refinerSwitch?: number;
+    loras?: Array<{ enabled: boolean; model: string; weight: number }>;
+
+    // Sampler settings
+    sampler?: string;
+    scheduler?: string;
+    clipSkip?: number;
+
+    // Advanced
+    adaptiveCfg?: number;
+    admScalerPositive?: number;
+    admScalerNegative?: number;
+    admScalerEnd?: number;
+
+    // FreeU
+    freeuEnabled?: boolean;
+    freeuB1?: number;
+    freeuB2?: number;
+    freeuS1?: number;
+    freeuS2?: number;
+
+    // ControlNet
+    controlnetSoftness?: number;
 }
 
 function generateSessionHash(): string {
@@ -270,24 +304,27 @@ function buildGenerateData(params: GenerateParams): any[] {
     data.push(params.prompt); // prompt - 2
     data.push(params.negativePrompt || ''); // negative_prompt - 3
     data.push(['Fooocus V2', 'Fooocus Enhance', 'Fooocus Sharp']); // style_selections - 4
-    data.push('Speed'); // performance_selection - 5
+    data.push(params.performance || 'Speed'); // performance_selection - 5
     data.push(params.aspectRatio || '1152×896'); // aspect_ratios_selection - 6
-    data.push(1); // image_number - 7
-    data.push('png'); // output_format - 8
+    data.push(params.imageNumber || 1); // image_number - 7
+    data.push(params.outputFormat || 'png'); // output_format - 8
     data.push(String(params.seed ?? Math.floor(Math.random() * 999999999))); // image_seed - 9
     data.push(false); // read_wildcards_in_order - 10
-    data.push(2.0); // sharpness - 11
-    data.push(4.0); // guidance_scale - 12
+    data.push(params.sharpness ?? 2.0); // sharpness - 11
+    data.push(params.guidanceScale ?? 4.0); // guidance_scale - 12
 
     // Line 984: base_model, refiner_model, refiner_switch + lora_ctrls
-    data.push('juggernautXL_v8Rundiffusion.safetensors'); // base_model - 13
-    data.push('None'); // refiner_model - 14
-    data.push(0.5); // refiner_switch - 15
+    data.push(params.baseModel || 'juggernautXL_v8Rundiffusion.safetensors'); // base_model - 13
+    data.push(params.refinerModel || 'None'); // refiner_model - 14
+    data.push(params.refinerSwitch ?? 0.5); // refiner_switch - 15
+
     // lora_ctrls (5 LoRAs x 3 params each = 15 items)
+    const loras = params.loras || [];
     for (let i = 0; i < 5; i++) {
-        data.push(true); // lora_enabled
-        data.push('None'); // lora_model
-        data.push(1.0); // lora_weight
+        const lora = loras[i] || { enabled: false, model: 'None', weight: 1.0 };
+        data.push(lora.enabled); // lora_enabled
+        data.push(lora.model); // lora_model
+        data.push(lora.weight); // lora_weight
     }
     // Now at index 31
 
@@ -309,11 +346,15 @@ function buildGenerateData(params: GenerateParams): any[] {
     data.push(false, false, false, false); // 39-42
 
     // Line 989: adm_scaler_positive, adm_scaler_negative, adm_scaler_end, adaptive_cfg, clip_skip
-    data.push(1.5, 0.8, 0.3, 7.0, 2.0); // 43-47
+    data.push(params.admScalerPositive ?? 1.5); // 43
+    data.push(params.admScalerNegative ?? 0.8); // 44
+    data.push(params.admScalerEnd ?? 0.3); // 45
+    data.push(params.adaptiveCfg ?? 7.0); // 46
+    data.push(params.clipSkip ?? 2.0); // 47
 
     // Line 990: sampler_name, scheduler_name, vae_name
-    data.push('dpmpp_2m_sde_gpu'); // 48
-    data.push('karras'); // 49
+    data.push(params.sampler || 'dpmpp_2m_sde_gpu'); // 48
+    data.push(params.scheduler || 'karras'); // 49
     data.push('Default (model)'); // 50
 
     // Line 991: overwrite_step, overwrite_switch, overwrite_width, overwrite_height, overwrite_vary_strength
@@ -327,10 +368,14 @@ function buildGenerateData(params: GenerateParams): any[] {
 
     // Line 994: refiner_swap_method, controlnet_softness
     data.push('joint'); // 63
-    data.push(0.25); // 64
+    data.push(params.controlnetSoftness ?? 0.25); // 64
 
-    // Line 995: freeu_ctrls (4 items)
-    data.push(false, 1.01, 1.02, 0.99, 0.95); // 65-69 (5 items: enabled + 4 values)
+    // Line 995: freeu_ctrls (5 items: enabled + 4 values)
+    data.push(params.freeuEnabled ?? false); // 65
+    data.push(params.freeuB1 ?? 1.01); // 66
+    data.push(params.freeuB2 ?? 1.02); // 67
+    data.push(params.freeuS1 ?? 0.99); // 68
+    data.push(params.freeuS2 ?? 0.95); // 69
 
     // Line 996: inpaint_ctrls (multiple items for inpaint settings)
     // Based on typical Fooocus setup: inpaint_mode, disable_initial_latent, engine, strength, respective_field, etc.
