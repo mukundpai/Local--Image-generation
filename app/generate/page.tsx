@@ -1,8 +1,118 @@
-import React from 'react';
+'use client';
+
+import React, { useState } from 'react';
 import { Button } from '@/components/ui/Button';
 import { Textarea } from '@/components/ui/Textarea';
+import { trpc } from '@/lib/trpc/client';
+import { useGenerationStore } from '@/stores/generationStore';
+import { ImageHistoryPanel } from '@/components/ImageHistoryPanel';
+import { generateImage, GenerateParams } from '@/lib/api';
+import { AdvancedSettingsPanel, AdvancedSettings, DEFAULT_SETTINGS } from '@/components/AdvancedSettingsPanel';
+
+const INFLUENCER_ID = 'sara-influencer-001'; // Hardcoded for now
 
 export default function StudioPage() {
+    const [prompt, setPrompt] = useState('(masterpiece, best quality), realistic photo of Sara, 24yo influencer, sitting in a modern cafe, drinking matcha latte, wearing oversized beige hoodie, soft natural lighting, depth of field, 8k uhd');
+    const [negativePrompt, setNegativePrompt] = useState('blurry, bad anatomy, extra fingers, cartoon, 3d render, illustration, text, watermark, low quality, worst quality');
+    const [generatedImage, setGeneratedImage] = useState<string | null>(null);
+    const [seed, setSeed] = useState<number | undefined>(undefined);
+    const [advancedSettings, setAdvancedSettings] = useState<AdvancedSettings>(DEFAULT_SETTINGS);
+    const [showAdvanced, setShowAdvanced] = useState(false);
+
+    const { isGenerating, progress, setGenerating, setProgress } = useGenerationStore();
+    const [statusMessage, setStatusMessage] = useState('Ready');
+
+    // tRPC mutation to save image to database
+    const saveImageMutation = trpc.images.generate.useMutation({
+        onSuccess: (data) => {
+            console.log('Image saved to database:', data);
+        },
+        onError: (error) => {
+            console.error('Failed to save image:', error);
+        },
+    });
+
+    const handleGenerate = async () => {
+        if (!prompt) return;
+
+        setGenerating(true);
+        setProgress(0, 'Initializing...');
+        setStatusMessage('Initializing...');
+
+        try {
+            const actualSeed = advancedSettings.seed !== null ? advancedSettings.seed : (seed || Math.floor(Math.random() * 999999999));
+            const params: GenerateParams = {
+                prompt,
+                negativePrompt,
+                seed: actualSeed,
+                aspectRatio: advancedSettings.aspectRatio,
+                // Advanced settings
+                performance: advancedSettings.performance,
+                imageNumber: advancedSettings.imageNumber,
+                outputFormat: advancedSettings.outputFormat,
+                sharpness: advancedSettings.sharpness,
+                guidanceScale: advancedSettings.guidanceScale,
+                // Model settings
+                baseModel: advancedSettings.baseModel,
+                refinerModel: advancedSettings.refinerModel,
+                refinerSwitch: advancedSettings.refinerSwitch,
+                loras: advancedSettings.loras,
+                // Sampler settings
+                sampler: advancedSettings.sampler,
+                scheduler: advancedSettings.scheduler,
+                clipSkip: advancedSettings.clipSkip,
+                // Advanced
+                adaptiveCfg: advancedSettings.adaptiveCfg,
+                admScalerPositive: advancedSettings.admScalerPositive,
+                admScalerNegative: advancedSettings.admScalerNegative,
+                admScalerEnd: advancedSettings.admScalerEnd,
+                // FreeU
+                freeuEnabled: advancedSettings.freeuEnabled,
+                freeuB1: advancedSettings.freeuB1,
+                freeuB2: advancedSettings.freeuB2,
+                freeuS1: advancedSettings.freeuS1,
+                freeuS2: advancedSettings.freeuS2,
+                // ControlNet
+                controlnetSoftness: advancedSettings.controlnetSoftness,
+            };
+            const imageUrl = await generateImage(params, (prog, msg) => {
+                setProgress(prog, msg);
+                setStatusMessage(msg);
+            });
+
+            if (imageUrl) {
+                setGeneratedImage(imageUrl);
+                setStatusMessage('Generation Complete');
+
+                // Save to database via tRPC
+                saveImageMutation.mutate({
+                    influencerId: INFLUENCER_ID,
+                    prompt,
+                    negativePrompt: negativePrompt || undefined,
+                    seed: BigInt(actualSeed),
+                    aspectRatio: '1024×1024',
+                    imageUrl,
+                    width: 1024,
+                    height: 1024,
+                });
+            } else {
+                setStatusMessage('Generation Failed');
+            }
+        } catch (error) {
+            console.error(error);
+            setStatusMessage('Error: ' + (error instanceof Error ? error.message : 'Unknown error'));
+        } finally {
+            setGenerating(false);
+            setProgress(100, 'Complete');
+        }
+    };
+
+    const handleSelectFromHistory = (imageUrl: string, historyPrompt: string, historySeed: bigint) => {
+        setGeneratedImage(imageUrl);
+        setPrompt(historyPrompt);
+        setSeed(Number(historySeed));
+    };
+
     return (
         <div className="bg-background-dark text-white font-display overflow-hidden h-screen flex flex-col selection:bg-white selection:text-black">
             {/* Header */}
@@ -53,11 +163,12 @@ export default function StudioPage() {
                                     variant="studio"
                                     rows={6}
                                     placeholder="// Enter visual description..."
-                                    defaultValue="(masterpiece, best quality), realistic photo of Sara, 24yo influencer, sitting in a modern cafe, drinking matcha latte, wearing oversized beige hoodie, soft natural lighting, depth of field, 8k uhd"
+                                    value={prompt}
+                                    onChange={(e) => setPrompt(e.target.value)}
                                 />
                             </div>
 
-                            {/* LoRA Accordion (Simplified) */}
+                            {/* LoRA Accordion (Simplified - visual only for now) */}
                             <div className="border border-border-dark bg-surface-dark/30">
                                 <div className="flex items-center justify-between gap-6 p-2 bg-surface-dark border-b border-border-dark">
                                     <p className="text-white text-xs font-mono uppercase tracking-wider">Style Adapters</p>
@@ -87,15 +198,30 @@ export default function StudioPage() {
                                     variant="studio"
                                     rows={4}
                                     placeholder="// Exclude patterns..."
-                                    defaultValue="blurry, bad anatomy, extra fingers, cartoon, 3d render, illustration, text, watermark, low quality, worst quality"
+                                    value={negativePrompt}
+                                    onChange={(e) => setNegativePrompt(e.target.value)}
                                 />
                             </div>
+
+                            {/* Advanced Settings Panel */}
+                            <AdvancedSettingsPanel
+                                settings={advancedSettings}
+                                onSettingsChange={setAdvancedSettings}
+                                isOpen={showAdvanced}
+                                onToggle={() => setShowAdvanced(!showAdvanced)}
+                            />
                         </div>
                     </div>
 
                     <div className="p-5 border-t border-border-dark bg-background-dark">
-                        <Button variant="primary" className="w-full font-mono uppercase tracking-widest rounded-none h-12 font-bold" leftIcon={<span className="material-symbols-outlined text-lg">shutter_speed</span>}>
-                            Develop
+                        <Button
+                            variant="primary"
+                            className="w-full font-mono uppercase tracking-widest rounded-none h-12 font-bold"
+                            leftIcon={isGenerating ? <span className="animate-spin material-symbols-outlined">progress_activity</span> : <span className="material-symbols-outlined text-lg">shutter_speed</span>}
+                            onClick={handleGenerate}
+                            disabled={isGenerating}
+                        >
+                            {isGenerating ? 'Developing...' : 'Develop'}
                         </Button>
                         <div className="flex justify-between items-center mt-3 text-[10px] text-text-secondary font-mono uppercase">
                             <span className="flex items-center gap-1"><span className="w-1.5 h-1.5 bg-white rounded-full"></span> Cost: 4</span>
@@ -129,14 +255,23 @@ export default function StudioPage() {
                             <div className="absolute -bottom-1 -left-1 w-6 h-6 border-b border-l border-white/20 z-10"></div>
                             <div className="absolute -bottom-1 -right-1 w-6 h-6 border-b border-r border-white/20 z-10"></div>
                             <img
-                                src="https://lh3.googleusercontent.com/aida-public/AB6AXuDXa3Yhy1_NRkikVF2rhZmPRyNr0Q30e8vD8JYCEmVFvJnwZbZBPqQ8pvIuEcaGx5lA1nNPz8ibSK9fsGWzGSzBfekc0FwDNjskpT2bbZQSGyjFzrcfV-Lb7AMui-ae0cdVbTG2mVwPKfPJwiLnNVclBhpOSheo-P985WXMfcmSQJ2IvwVx4SrPgQrzk-MrJ1Yt_OwCMFUVn5KPP7USgEeRYm_wOcy5R6H5DZC4LMZNH2QzKkLqnS6xBin7GqBlIvR5RO85FzaXZzg4"
-                                className="max-h-full w-full h-full object-contain grayscale-[20%] sepia-[10%] contrast-[1.1]"
+                                src={generatedImage || "https://lh3.googleusercontent.com/aida-public/AB6AXuDXa3Yhy1_NRkikVF2rhZmPRyNr0Q30e8vD8JYCEmVFvJnwZbZBPqQ8pvIuEcaGx5lA1nNPz8ibSK9fsGWzGSzBfekc0FwDNjskpT2bbZQSGyjFzrcfV-Lb7AMui-ae0cdVbTG2mVwPKfPJwiLnNVclBhpOSheo-P985WXMfcmSQJ2IvwVx4SrPgQrzk-MrJ1Yt_OwCMFUVn5KPP7USgEeRYm_wOcy5R6H5DZC4LMZNH2QzKkLqnS6xBin7GqBlIvR5RO85FzaXZzg4"}
+                                className={`max-h-full w-full h-full object-contain ${generatedImage ? '' : 'grayscale-[20%] sepia-[10%] contrast-[1.1]'}`}
                                 alt="Generated content"
                             />
+
+                            {isGenerating && (
+                                <div className="absolute inset-0 bg-black/50 flex flex-col items-center justify-center backdrop-blur-sm z-20">
+                                    <div className="w-64 h-1 bg-white/20 rounded-full overflow-hidden mb-4">
+                                        <div className="h-full bg-studio-accent transition-all duration-300" style={{ width: `${progress}%` }}></div>
+                                    </div>
+                                    <p className="text-white font-mono text-xs uppercase tracking-widest animate-pulse">{statusMessage}</p>
+                                </div>
+                            )}
                         </div>
                     </div>
 
-                    {/* Action Buttons */}
+                    {/* Action Buttons (Bottom) */}
                     <div className="absolute bottom-24 left-1/2 -translate-x-1/2 flex gap-3 z-20">
                         <Button variant="studio" className="bg-[#0a0a0a] text-text-secondary hover:bg-white hover:text-black border border-border-dark backdrop-blur-md h-9 text-xs">
                             <span className="material-symbols-outlined text-base mr-2">hd</span> Upscale
@@ -144,100 +279,24 @@ export default function StudioPage() {
                         <Button variant="studio" className="bg-[#0a0a0a] text-text-secondary hover:bg-white hover:text-black border border-border-dark backdrop-blur-md h-9 text-xs">
                             <span className="material-symbols-outlined text-base mr-2">splitscreen</span> Variant
                         </Button>
-                        <Button variant="primary" className="h-9 text-xs font-mono font-bold">
-                            <span className="material-symbols-outlined text-base mr-2">download</span> Save
-                        </Button>
+                        {generatedImage && (
+                            <a href={generatedImage} download="generated-image.png">
+                                <Button variant="primary" className="h-9 text-xs font-mono font-bold">
+                                    <span className="material-symbols-outlined text-base mr-2">download</span> Save
+                                </Button>
+                            </a>
+                        )}
                     </div>
 
-                    {/* History Ribbon */}
-                    <div className="h-24 border-t border-border-dark bg-background-dark flex items-center px-4 gap-4 overflow-x-auto shrink-0 custom-scrollbar z-20 relative">
-                        <div className="absolute top-0 left-0 bottom-0 w-8 bg-gradient-to-r from-background-dark to-transparent pointer-events-none z-10"></div>
-                        {/* Current Item */}
-                        <div className="relative group">
-                            <div
-                                className="h-16 w-16 border border-white bg-cover bg-center cursor-pointer shrink-0 grayscale-[20%]"
-                                style={{ backgroundImage: 'url("https://lh3.googleusercontent.com/aida-public/AB6AXuAHU6IROLXTL_7BtiHfJWOzqvHxyAxANt7JflTkV7elpUkEsGhkSPqaFsC9f2PmdQMAZuncNPayLx0yRpr-g_Ayv8lFbSd5spKLSlFQJn5kebCnC-vtEt1Kj37Zkyt6UvAjgwZtc6L0RjV8xXWts8YLLRq3-PFjLAsctIq1Ehd4iU7iPn8yhHnHitxa4pIRRjfy_OBvcKKp9-ikgxiVjiV8WoPqLQ6cPMQ5xRmkskALLB0ZHBBmmacvj58pG_B8yiStC87JuDt9SMuK")' }}
-                            />
-                            <div className="absolute -bottom-2 right-1/2 translate-x-1/2 text-[9px] bg-white text-black px-1 font-mono leading-tight">NOW</div>
-                        </div>
-                        {/* Previous Items */}
-                        {[
-                            'https://lh3.googleusercontent.com/aida-public/AB6AXuCoIumT5shXjqrSrzO2D8Bfu3b3MfKPqDtyWNWBDbejMI6W93RT8JIYCdZF_3l0-qHhThKkHX91Nno4tZC8t6sK2WDThQRiaJNpgIXqhGDZ3dKJGrYLzvl6mP6sWug8bvXlA5VemrAgL_T1-IeDXXzOG-99kXwZ4IrKJDmQY6HVbbg0jUzhSO0va8lYXInRMOaIbb3TbfDHpZhQGN9dqdcUT5D2XM6WcdvO10t5o81_V6lhTjZFwhcud5ayO-nqiXaTlkvVvC8S-TAs',
-                            'https://lh3.googleusercontent.com/aida-public/AB6AXuDNV8PaHFMMLw3XsgTH2-ixXpQJ6emxNfUCLPvyX2nOaEK1rH9EkfHWFJ7IWWGvZJzZStjBokGHTjOx5rsUEQPwqB7Vi9cY9XfV6144TgtVF5RcJkwov6NzlXhuDsDQwA-_dYb1-2MnJW0kwDyIT23UJn0SQkrY0ZkZX72kMNH6hx5j_kY76KmiJ51yVg0E9rFuz7yjBypi57DiGqk2Zg4PpSDEGRfAL-gK-Nrr5aZ6HOcmdsKctfdbwm2-MZz4IvpHvPBEmEiknFHP',
-                            'https://lh3.googleusercontent.com/aida-public/AB6AXuAQBmPfm3A9edxcS9Dkr2FmvdGIfmP66hMILaieiIKLGjXstgjsUWAnV-D90tl98oe4APymXejN90TxRhd6ntFaE5_F0-B9nem4WQ9w3eWj1Ezasz46LFF-qK2s3dJ_nOvY0yL6b6f2ubKPlLuGP3gf1vOJQChxsG3dRoSKzVjtdNf0pzmG1QGzCd3TG1o6m6o2ZLXb2OkGMjWMSKXdYtEOWtAe64DVXh9Jh42ylIj-z6m9iG6XrxpNAQWKX0bV83R93D4w_0DTJYt2',
-                            'https://lh3.googleusercontent.com/aida-public/AB6AXuCIwV1bGpxmsW8AfUqJ51SIONkla7DBSpj3E2SDtxBuRZPHaVGvrIbnkY_fTNaU1l1yfUWWb8pMFoBP-a2KWz_8blAfp5hzglapGggiVo7hHKJc2cnoHlS6a4-hr_1yf5dy1XjShP2lq7BSv5CQuaG8ROxezQjK0Dim9_5fHxi4-JCfJiTlCz_3uQa_4l-POHpXLwJTLKpDPEO53D-5o6NfwVq3V8-rPZlVL7H0HGJOkbU-A5naonZHW0z8p6hJ6ZQ3s93lU33cCns-'
-                        ].map((url, i) => (
-                            <div key={i} className="h-16 w-16 border border-border-dark hover:border-white bg-cover bg-center cursor-pointer opacity-50 hover:opacity-100 grayscale hover:grayscale-0 transition-all shrink-0" style={{ backgroundImage: `url('${url}')` }} />
-                        ))}
-                    </div>
+
+                    {/* History Ribbon with Database Integration */}
+                    <ImageHistoryPanel
+                        influencerId={INFLUENCER_ID}
+                        onSelectImage={handleSelectFromHistory}
+                    />
+
+
                 </main>
-
-                {/* Right Sidebar */}
-                <aside className="w-80 shrink-0 border-l border-border-dark bg-background-dark flex flex-col overflow-y-auto custom-scrollbar z-10 hidden xl:flex">
-                    <div className="p-5">
-                        <div className="flex justify-between items-center mb-6 pb-2 border-b border-border-dark">
-                            <h3 className="text-white tracking-widest uppercase text-xs font-bold">Fine Tuning</h3>
-                            <button className="text-text-secondary hover:text-white text-[10px] uppercase tracking-widest border border-border-dark px-2 py-0.5 hover:border-white transition-colors">Reset</button>
-                        </div>
-
-                        {/* Config Sections */}
-                        <div className="mb-8">
-                            <h4 className="text-text-secondary text-[10px] font-mono font-bold uppercase tracking-widest mb-4 flex items-center gap-2">
-                                <span className="material-symbols-outlined text-sm">face</span> Physical Attributes
-                            </h4>
-                            <div className="flex flex-col gap-4">
-                                <div className="flex flex-col gap-1.5">
-                                    <label className="text-white text-xs font-medium">Hair Tone</label>
-                                    <select className="w-full appearance-none rounded-none border border-border-dark bg-[#0a0a0a] py-1.5 px-3 text-white focus:border-white focus:outline-none text-xs font-mono">
-                                        <option>Dark Brown [Ref A]</option>
-                                        <option>Platinum Blonde</option>
-                                    </select>
-                                </div>
-                                <div className="flex flex-col gap-1.5">
-                                    <label className="text-white text-xs font-medium">Iris Pigment</label>
-                                    <select className="w-full appearance-none rounded-none border border-border-dark bg-[#0a0a0a] py-1.5 px-3 text-white focus:border-white focus:outline-none text-xs font-mono">
-                                        <option>Hazel [Default]</option>
-                                        <option>Crystal Blue</option>
-                                    </select>
-                                </div>
-                            </div>
-                        </div>
-
-                        <div className="mb-8">
-                            <h4 className="text-text-secondary text-[10px] font-mono font-bold uppercase tracking-widest mb-4 flex items-center gap-2">
-                                <span className="material-symbols-outlined text-sm">photo_camera</span> Optics
-                            </h4>
-                            <div className="flex flex-col gap-5">
-                                <div className="flex justify-between">
-                                    <label className="text-white text-xs font-medium">Guidance (CFG)</label>
-                                    <span className="text-text-secondary font-mono text-xs">7.5</span>
-                                </div>
-                                <input type="range" className="w-full" min="1" max="20" step="0.5" defaultValue="7.5" />
-                            </div>
-                        </div>
-
-                    </div>
-
-                    <div className="mt-auto pt-6 border-t border-border-dark">
-                        <div className="bg-surface-dark/50 border border-border-dark p-4">
-                            <div className="flex items-center justify-between mb-3">
-                                <div className="flex items-center gap-2">
-                                    <span className="material-symbols-outlined text-white text-sm">memory</span>
-                                    <span className="text-xs font-bold text-white uppercase tracking-wider">System Status</span>
-                                </div>
-                                <div className="w-1.5 h-1.5 bg-white rounded-full animate-pulse"></div>
-                            </div>
-                            <div className="space-y-2">
-                                <div className="flex justify-between text-[10px] font-mono text-text-secondary uppercase">
-                                    <span>Core</span><span className="text-white">SDXL_TURBO_V1</span>
-                                </div>
-                                <div className="flex justify-between text-[10px] font-mono text-text-secondary uppercase">
-                                    <span>VRAM</span><span className="text-white">14.2 GB / 24 GB</span>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                </aside>
             </div>
         </div>
     );

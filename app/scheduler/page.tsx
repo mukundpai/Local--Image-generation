@@ -1,8 +1,74 @@
-import React from 'react';
+'use client';
+
+import React, { useState, useMemo } from 'react';
 import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
+import { trpc } from '@/lib/trpc/client';
+import { CreatePostModal } from '@/components/CreatePostModal';
+
+const INFLUENCER_ID = 'sara-influencer-001';
 
 export default function SchedulerPage() {
+    const [currentDate, setCurrentDate] = useState(new Date());
+    const [selectedPost, setSelectedPost] = useState<any>(null);
+    const [showCreateModal, setShowCreateModal] = useState(false);
+
+    // Fetch scheduled posts
+    const { data: scheduledPosts, refetch } = trpc.posts.list.useQuery({
+        influencerId: INFLUENCER_ID,
+    });
+
+    // Fetch images for post creation
+    const { data: availableImages } = trpc.images.getHistory.useQuery({
+        influencerId: INFLUENCER_ID,
+        limit: 10,
+    });
+
+    // Schedule post mutation
+    const schedulePostMutation = trpc.posts.schedule.useMutation({
+        onSuccess: () => {
+            refetch();
+            setShowCreateModal(false);
+        },
+    });
+
+    // Delete post mutation
+    const deletePostMutation = trpc.posts.delete.useMutation({
+        onSuccess: () => {
+            refetch();
+            setSelectedPost(null);
+        },
+    });
+
+    // Get month name and year
+    const monthName = currentDate.toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
+
+    // Get days in month
+    const daysInMonth = new Date(currentDate.getFullYear(), currentDate.getMonth() + 1, 0).getDate();
+    const firstDayOfMonth = new Date(currentDate.getFullYear(), currentDate.getMonth(), 1).getDay();
+    const adjustedFirstDay = firstDayOfMonth === 0 ? 6 : firstDayOfMonth - 1; // Adjust for Monday start
+
+    // Group posts by date
+    const postsByDate = useMemo(() => {
+        const map = new Map<number, any[]>();
+        scheduledPosts?.forEach((post: any) => {
+            const postDate = new Date(post.scheduledTime);
+            if (postDate.getMonth() === currentDate.getMonth() && postDate.getFullYear() === currentDate.getFullYear()) {
+                const day = postDate.getDate();
+                if (!map.has(day)) map.set(day, []);
+                map.get(day)!.push(post);
+            }
+        });
+        return map;
+    }, [scheduledPosts, currentDate]);
+
+    const handlePrevMonth = () => {
+        setCurrentDate(new Date(currentDate.getFullYear(), currentDate.getMonth() - 1, 1));
+    };
+
+    const handleNextMonth = () => {
+        setCurrentDate(new Date(currentDate.getFullYear(), currentDate.getMonth() + 1, 1));
+    };
     return (
         <div className="bg-[#f0f0f0] text-black font-reading min-h-screen flex flex-col selection:bg-[#d4c5a9] selection:text-black relative">
             {/* Paper Texture Overlay */}
@@ -38,13 +104,17 @@ export default function SchedulerPage() {
                     <header className="px-8 py-6 border-b border-[#e0e0e0] bg-[#f5f5f5]/90 backdrop-blur-sm sticky top-0 z-20 flex justify-between items-end">
                         <div>
                             <span className="text-[10px] uppercase tracking-[0.2em] text-[#888] font-bold block mb-1">Schedule Manager</span>
-                            <h2 className="font-elegant text-4xl italic">October 2024</h2>
+                            <div className="flex items-center gap-4">
+                                <button onClick={handlePrevMonth} className="text-[#888] hover:text-black"><span className="material-symbols-outlined">chevron_left</span></button>
+                                <h2 className="font-elegant text-4xl italic">{monthName}</h2>
+                                <button onClick={handleNextMonth} className="text-[#888] hover:text-black"><span className="material-symbols-outlined">chevron_right</span></button>
+                            </div>
                         </div>
                         <div className="flex gap-3">
                             <Button variant="vintage" className="bg-white border-[#d4d4d4] hover:bg-[#fafafa] text-black h-9 px-4">
                                 <span className="material-symbols-outlined text-sm mr-2">filter_list</span> Filter
                             </Button>
-                            <Button variant="vintage" className="bg-black text-white hover:bg-[#333] hover:text-white border-transparent h-9 px-5 shadow-lg">
+                            <Button variant="vintage" className="bg-black text-white hover:bg-[#333] hover:text-white border-transparent h-9 px-5 shadow-lg" onClick={() => setShowCreateModal(true)}>
                                 <span className="material-symbols-outlined text-sm mr-2">add</span> Create Post
                             </Button>
                         </div>
@@ -63,32 +133,37 @@ export default function SchedulerPage() {
                             {/* Calendar Grid */}
                             <div className="grid grid-cols-7 border-l border-t border-[#e0e0e0] bg-white shadow-sm">
                                 {/* Blank Days */}
-                                {[1, 2].map(i => <div key={`ph-${i}`} className="min-h-[140px] border-r border-b border-[#e0e0e0] bg-[#fafafa]/50"></div>)}
+                                {Array.from({ length: adjustedFirstDay }).map((_, i) => <div key={`ph-${i}`} className="min-h-[140px] border-r border-b border-[#e0e0e0] bg-[#fafafa]/50"></div>)}
 
                                 {/* Days */}
-                                {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12].map(day => (
-                                    <div key={day} className="min-h-[140px] border-r border-b border-[#e0e0e0] p-2 relative group hover:bg-[#fafafa] transition-colors">
-                                        <span className={`text-xs font-mono absolute top-2 right-2 ${day === 4 ? 'bg-black text-white size-6 flex items-center justify-center rounded-full' : 'text-[#aaa]'}`}>{day}</span>
+                                {Array.from({ length: daysInMonth }).map((_, i) => {
+                                    const day = i + 1;
+                                    const dayPosts = postsByDate.get(day) || [];
+                                    const isToday = new Date().getDate() === day && new Date().getMonth() === currentDate.getMonth() && new Date().getFullYear() === currentDate.getFullYear();
 
-                                        {/* Post Items */}
-                                        {day === 4 && (
-                                            <div className="mt-6 mx-1 bg-[#f0f0f0] border border-[#e0e0e0] p-2 hover:shadow-md transition-shadow cursor-pointer">
-                                                <div className="aspect-square bg-cover bg-center mb-2 grayscale" style={{ backgroundImage: 'url("https://lh3.googleusercontent.com/aida-public/AB6AXuDjCUIhlV-h_SeaIvdPz3FXcTOU5v0VW5-oDI0bQVMdjvwtlLueDbL8oV0kVD0FlteDR9Ss7s5klTegzvCEdhO1_PyROz_5pkkPdYY4OovDsJ-PfsWmJ7l4IPCYJnAbZhAslf-1EfwFCk3tYjFGEhv8LUHFET8NRJmQyp9mTYcobTGmWspMqFyIJfrlbeJcANdaqiC_ODnywzvuDQoyIcAcjf7cSueDOuYID5_mhylEM-SatpbOAoJdrlFfVvFsr3LJF15XuajRLS6j")' }}></div>
-                                                <div className="flex items-center gap-1.5 mb-1"><span className="size-1.5 rounded-full bg-orange-500"></span><span className="text-[8px] uppercase tracking-wider font-bold text-[#666]">Insta</span></div>
-                                                <p className="text-[10px] font-serif italic leading-tight truncate">Campaign Launch...</p>
-                                            </div>
-                                        )}
-                                        {day === 6 && (
-                                            <div className="mt-6 mx-1 bg-[#f0f0f0] border border-[#e0e0e0] p-2 hover:shadow-md transition-shadow cursor-pointer">
-                                                <div className="aspect-square bg-cover bg-center mb-2 grayscale" style={{ backgroundImage: 'url("https://lh3.googleusercontent.com/aida-public/AB6AXuCiO3S_3T0Z-6bT-R_M0a4bXn0VAgq-N7F3uS3dG9X5w0l2_VqH4yT6nB8jK1aD7mC5pL9rF9vW8xU4zE_tYQ1sO0kH3lA7_V6bJ5nC2yR4dM9pW8zS7tF6uG3vH1X0_aK5qB4nL9mD2rE8sJ7cT6oP5vU4_w")' }}></div>
-                                                <div className="flex items-center gap-1.5 mb-1"><span className="size-1.5 rounded-full bg-blue-500"></span><span className="text-[8px] uppercase tracking-wider font-bold text-[#666]">Twitter</span></div>
-                                                <p className="text-[10px] font-serif italic leading-tight truncate">Threads Update</p>
-                                            </div>
-                                        )}
-                                    </div>
-                                ))}
+                                    return (
+                                        <div key={day} className="min-h-[140px] border-r border-b border-[#e0e0e0] p-2 relative group hover:bg-[#fafafa] transition-colors">
+                                            <span className={`text-xs font-mono absolute top-2 right-2 ${isToday ? 'bg-black text-white size-6 flex items-center justify-center rounded-full' : 'text-[#aaa]'}`}>{day}</span>
+
+                                            {/* Post Items */}
+                                            {dayPosts.map((post: any, j: number) => (
+                                                <div key={post.id} className="mt-6 mx-1 bg-[#f0f0f0] border border-[#e0e0e0] p-2 hover:shadow-md transition-shadow cursor-pointer" onClick={() => setSelectedPost(post)}>
+                                                    {post.imageId && (
+                                                        <div className="aspect-square bg-cover bg-center mb-2 grayscale" style={{ backgroundImage: `url('${post.image?.imageUrl || ''}')` }}></div>
+                                                    )}
+                                                    <div className="flex items-center gap-1.5 mb-1">
+                                                        <span className={`size-1.5 rounded-full ${post.status === 'PUBLISHED' ? 'bg-green-500' : post.status === 'SCHEDULED' ? 'bg-orange-500' : 'bg-blue-500'}`}></span>
+                                                        <span className="text-[8px] uppercase tracking-wider font-bold text-[#666]">{post.status}</span>
+                                                    </div>
+                                                    <p className="text-[10px] font-serif italic leading-tight truncate">{post.caption?.slice(0, 20) || 'Untitled'}...</p>
+                                                </div>
+                                            ))}
+                                        </div>
+                                    );
+                                })}
+
                                 {/* Remaining Blank Days to fill grid */}
-                                {[1, 2, 3, 4, 5, 6, 7].map(i => <div key={`ph-end-${i}`} className="min-h-[140px] border-r border-b border-[#e0e0e0] bg-[#fafafa]/50"></div>)}
+                                {Array.from({ length: (7 - ((adjustedFirstDay + daysInMonth) % 7)) % 7 }).map((_, i) => <div key={`ph-end-${i}`} className="min-h-[140px] border-r border-b border-[#e0e0e0] bg-[#fafafa]/50"></div>)}
                             </div>
                         </div>
                     </div>
@@ -96,44 +171,65 @@ export default function SchedulerPage() {
 
                 {/* Details Sidebar */}
                 <aside className="w-80 bg-white border-l border-[#d4d4d4] flex flex-col pt-8 shrink-0 hidden xl:flex">
-                    <div className="px-6 mb-6">
-                        <span className="text-[10px] uppercase tracking-widest font-bold text-[#888] block mb-2">Selected</span>
-                        <h3 className="font-elegant text-2xl italic">Campaign Launch</h3>
-                    </div>
-
-                    <div className="px-6 mb-8">
-                        <div className="aspect-[4/5] bg-cover bg-center border border-[#e0e0e0] p-2 shadow-lg rotate-1" style={{ backgroundImage: 'url("https://lh3.googleusercontent.com/aida-public/AB6AXuDjCUIhlV-h_SeaIvdPz3FXcTOU5v0VW5-oDI0bQVMdjvwtlLueDbL8oV0kVD0FlteDR9Ss7s5klTegzvCEdhO1_PyROz_5pkkPdYY4OovDsJ-PfsWmJ7l4IPCYJnAbZhAslf-1EfwFCk3tYjFGEhv8LUHFET8NRJmQyp9mTYcobTGmWspMqFyIJfrlbeJcANdaqiC_ODnywzvuDQoyIcAcjf7cSueDOuYID5_mhylEM-SatpbOAoJdrlFfVvFsr3LJF15XuajRLS6j")' }}></div>
-                    </div>
-
-                    <div className="flex-1 overflow-y-auto px-6 space-y-6">
-                        <div>
-                            <label className="text-[9px] uppercase tracking-widest font-bold text-[#888] block mb-1">Caption</label>
-                            <p className="font-reading text-sm text-[#444] leading-relaxed italic">"Embracing the future of digital identity. New collection drops tomorrow. #digitalfashion #metaverse"</p>
-                        </div>
-                        <div className="grid grid-cols-2 gap-4">
-                            <div>
-                                <label className="text-[9px] uppercase tracking-widest font-bold text-[#888] block mb-1">Date</label>
-                                <p className="font-mono text-xs text-black">Oct 4, 2024</p>
+                    {selectedPost ? (
+                        <>
+                            <div className="px-6 mb-6">
+                                <span className="text-[10px] uppercase tracking-widest font-bold text-[#888] block mb-2">Selected</span>
+                                <h3 className="font-elegant text-2xl italic">{selectedPost.caption?.slice(0, 30) || 'Untitled Post'}...</h3>
                             </div>
-                            <div>
-                                <label className="text-[9px] uppercase tracking-widest font-bold text-[#888] block mb-1">Time</label>
-                                <p className="font-mono text-xs text-black">10:00 AM EST</p>
-                            </div>
-                        </div>
-                        <div>
-                            <label className="text-[9px] uppercase tracking-widest font-bold text-[#888] block mb-1">Status</label>
-                            <div className="flex items-center gap-2">
-                                <span className="size-2 rounded-full bg-green-500 animate-pulse"></span>
-                                <span className="font-mono text-xs text-black">Scheduled</span>
-                            </div>
-                        </div>
-                    </div>
 
-                    <div className="p-6 border-t border-[#d4d4d4] bg-[#fafafa]">
-                        <Button variant="vintage" className="w-full bg-black text-white hover:bg-[#333] border-transparent h-10 shadow-md">Edit Post</Button>
-                    </div>
+                            {selectedPost.image?.imageUrl && (
+                                <div className="px-6 mb-8">
+                                    <div className="aspect-[4/5] bg-cover bg-center border border-[#e0e0e0] p-2 shadow-lg rotate-1" style={{ backgroundImage: `url('${selectedPost.image.imageUrl}')` }}></div>
+                                </div>
+                            )}
+
+                            <div className="flex-1 overflow-y-auto px-6 space-y-6">
+                                <div>
+                                    <label className="text-[9px] uppercase tracking-widest font-bold text-[#888] block mb-1">Caption</label>
+                                    <p className="font-reading text-sm text-[#444] leading-relaxed italic">"{selectedPost.caption || 'No caption'}"</p>
+                                </div>
+                                <div className="grid grid-cols-2 gap-4">
+                                    <div>
+                                        <label className="text-[9px] uppercase tracking-widest font-bold text-[#888] block mb-1">Date</label>
+                                        <p className="font-mono text-xs text-black">{new Date(selectedPost.scheduledTime).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}</p>
+                                    </div>
+                                    <div>
+                                        <label className="text-[9px] uppercase tracking-widest font-bold text-[#888] block mb-1">Time</label>
+                                        <p className="font-mono text-xs text-black">{new Date(selectedPost.scheduledTime).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })}</p>
+                                    </div>
+                                </div>
+                                <div>
+                                    <label className="text-[9px] uppercase tracking-widest font-bold text-[#888] block mb-1">Status</label>
+                                    <div className="flex items-center gap-2">
+                                        <span className={`size-2 rounded-full ${selectedPost.status === 'PUBLISHED' ? 'bg-green-500' : 'bg-orange-500 animate-pulse'}`}></span>
+                                        <span className="font-mono text-xs text-black">{selectedPost.status}</span>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div className="p-6 border-t border-[#d4d4d4] bg-[#fafafa] space-y-2">
+                                <Button variant="vintage" className="w-full bg-black text-white hover:bg-[#333] border-transparent h-10 shadow-md">Edit Post</Button>
+                                <Button variant="vintage" className="w-full bg-red-500 text-white hover:bg-red-600 border-transparent h-10" onClick={() => deletePostMutation.mutate({ id: selectedPost.id })}>Delete Post</Button>
+                            </div>
+                        </>
+                    ) : (
+                        <div className="flex-1 flex items-center justify-center">
+                            <div className="text-center px-6">
+                                <span className="material-symbols-outlined text-4xl text-[#ccc] mb-2">calendar_month</span>
+                                <p className="text-[#888] text-sm">Select a post to view details</p>
+                            </div>
+                        </div>
+                    )}
                 </aside>
             </div>
+
+            {/* Create Post Modal */}
+            <CreatePostModal
+                isOpen={showCreateModal}
+                onClose={() => setShowCreateModal(false)}
+                onSuccess={() => refetch()}
+            />
         </div>
     );
 }

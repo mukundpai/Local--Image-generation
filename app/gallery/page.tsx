@@ -1,7 +1,43 @@
-import React from 'react';
+'use client';
+
+import React, { useState } from 'react';
 import { Button } from '@/components/ui/Button';
+import { trpc } from '@/lib/trpc/client';
+
+const INFLUENCER_ID = 'sara-influencer-001';
 
 export default function GalleryPage() {
+    const [showCreateModal, setShowCreateModal] = useState(false);
+    const [newBundleName, setNewBundleName] = useState('');
+
+    // Fetch bundles
+    const { data: bundles, isLoading: bundlesLoading, refetch: refetchBundles } = trpc.bundles.list.useQuery({
+        influencerId: INFLUENCER_ID,
+    });
+
+    // Fetch recent images for display
+    const { data: recentImages } = trpc.images.getHistory.useQuery({
+        influencerId: INFLUENCER_ID,
+        limit: 8,
+    });
+
+    // Create bundle mutation
+    const createBundleMutation = trpc.bundles.create.useMutation({
+        onSuccess: () => {
+            refetchBundles();
+            setShowCreateModal(false);
+            setNewBundleName('');
+        },
+    });
+
+    const handleCreateBundle = () => {
+        if (!newBundleName) return;
+        createBundleMutation.mutate({
+            influencerId: INFLUENCER_ID,
+            title: newBundleName,
+            imageIds: [],
+        });
+    };
     return (
         <div className="bg-gallery-bg text-gallery-text font-sans min-h-screen flex flex-col selection:bg-white selection:text-black">
 
@@ -45,34 +81,30 @@ export default function GalleryPage() {
 
                     {/* Gallery Grid */}
                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-                        {[
-                            { title: 'Neon Nights', count: 12, img: 'https://lh3.googleusercontent.com/aida-public/AB6AXuCiO3S_3T0Z-6bT-R_M0a4bXn0VAgq-N7F3uS3dG9X5w0l2_VqH4yT6nB8jK1aD7mC5pL9rF9vW8xU4zE_tYQ1sO0kH3lA7_V6bJ5nC2yR4dM9pW8zS7tF6uG3vH1X0_aK5qB4nL9mD2rE8sJ7cT6oP5vU4_w', tags: ['Cyberpunk', 'Urban'] },
-                            { title: 'Morning Coffee', count: 8, img: 'https://lh3.googleusercontent.com/aida-public/AB6AXuD0jW2qX8d7L9V3pT4kH6mS1nB8vF0_c2gL5hY9zQ3xW7rU6oO2lM5kI1vE9nJ4d8pB3qA7sT0cW1xV5_zH6jK9mN4lB8qD2vS7oT6pW0yX9rU3kL4nO2vJ6wT5_yQ8sA4mC9lH1pG3vF8zE7jK4nL9_w', tags: ['Lifestyle', 'Cafe'] },
-                            { title: 'Desert Mirage', count: 15, img: 'https://lh3.googleusercontent.com/aida-public/AB6AXuDqH2vK9_n5W7rT4mS8pL1oV6xU0yB3wF5zG9lH4kQ2jC8vD7nS1mX9oI6wE5tJ4vK8_pL3nB7mC0yR4dM9pW8zS7tF6uG3vH1X0_aK5qB4nL9mD2rE8sJ7cT6oP5vU4_w', tags: ['Nature', 'Abstract'] },
-                            { title: 'Tokyo Drift', count: 24, img: 'https://lh3.googleusercontent.com/aida-public/AB6AXuCj8nK4_mV7pW9sS2lT5oR1qU6yV0xB3wF5zG9lH4kQ2jC8vD7nS1mX9oI6wE5tJ4vK8_pL3nB7mC0yR4dM9pW8zS7tF6uG3vH1X0_aK5qB4nL9mD2rE8sJ7cT6oP5vU4_w', tags: ['Automotive', 'Neon'] },
-                            { title: 'Minimalist Home', count: 6, img: 'https://lh3.googleusercontent.com/aida-public/AB6AXuBj9wK4_nV7pW9sS2lT5oR1qU6yV0xB3wF5zG9lH4kQ2jC8vD7nS1mX9oI6wE5tJ4vK8_pL3nB7mC0yR4dM9pW8zS7tF6uG3vH1X0_aK5qB4nL9mD2rE8sJ7cT6oP5vU4_w', tags: ['Interior', 'Clean'] },
-                            { title: 'Abstract Forms', count: 18, img: 'https://lh3.googleusercontent.com/aida-public/AB6AXuDi2vK9_n5W7rT4mS8pL1oV6xU0yB3wF5zG9lH4kQ2jC8vD7nS1mX9oI6wE5tJ4vK8_pL3nB7mC0yR4dM9pW8zS7tF6uG3vH1X0_aK5qB4nL9mD2rE8sJ7cT6oP5vU4_w', tags: ['Art', '3D'] },
-                            { title: 'Vintage Portrait', count: 9, img: 'https://lh3.googleusercontent.com/aida-public/AB6AXuCqH2vK9_n5W7rT4mS8pL1oV6xU0yB3wF5zG9lH4kQ2jC8vD7nS1mX9oI6wE5tJ4vK8_pL3nB7mC0yR4dM9pW8zS7tF6uG3vH1X0_aK5qB4nL9mD2rE8sJ7cT6oP5vU4_w', tags: ['Portrait', 'Retro'] },
-                            { title: 'Cyber City', count: 32, img: 'https://lh3.googleusercontent.com/aida-public/AB6AXuBk8wK4_nV7pW9sS2lT5oR1qU6yV0xB3wF5zG9lH4kQ2jC8vD7nS1mX9oI6wE5tJ4vK8_pL3nB7mC0yR4dM9pW8zS7tF6uG3vH1X0_aK5qB4nL9mD2rE8sJ7cT6oP5vU4_w', tags: ['Sci-Fi', 'City'] },
-                        ].map((item, i) => (
-                            <div key={i} className="group relative aspect-[4/5] overflow-hidden bg-gallery-card cursor-pointer">
-                                <div className="absolute inset-0 bg-cover bg-center grayscale group-hover:grayscale-0 transition-all duration-700 group-hover:scale-105" style={{ backgroundImage: `url('${item.img}')` }}></div>
-                                <div className="absolute inset-0 bg-black/20 group-hover:bg-black/0 transition-colors"></div>
-
-                                {/* Overlay Content */}
-                                <div className="absolute inset-0 flex flex-col justify-end p-6 opacity-100 group-hover:opacity-100 transition-opacity bg-gradient-to-t from-black/80 via-transparent to-transparent">
-                                    <div className="transform translate-y-4 group-hover:translate-y-0 transition-transform duration-500">
-                                        <h3 className="text-white text-xl font-serif italic mb-1">{item.title}</h3>
-                                        <div className="flex items-center justify-between">
-                                            <span className="text-gallery-secondary text-[10px] uppercase tracking-widest">{item.count} Assets</span>
-                                            <div className="flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity delay-100">
-                                                <button className="size-8 flex items-center justify-center rounded-full bg-white text-black hover:bg-gray-200"><span className="material-symbols-outlined text-sm">arrow_outward</span></button>
+                        {recentImages?.images && recentImages.images.length > 0 ? (
+                            recentImages.images.map((image: any, i: number) => (
+                                <div key={image.id} className="group relative aspect-[4/5] overflow-hidden bg-gallery-card cursor-pointer">
+                                    <div className="absolute inset-0 bg-cover bg-center grayscale group-hover:grayscale-0 transition-all duration-700 group-hover:scale-105" style={{ backgroundImage: `url('${image.imageUrl}')` }}></div>
+                                    <div className="absolute inset-0 bg-black/20 group-hover:bg-black/0 transition-colors"></div>
+                                    <div className="absolute inset-0 flex flex-col justify-end p-6 opacity-100 group-hover:opacity-100 transition-opacity bg-gradient-to-t from-black/80 via-transparent to-transparent">
+                                        <div className="transform translate-y-4 group-hover:translate-y-0 transition-transform duration-500">
+                                            <h3 className="text-white text-xl font-serif italic mb-1">{image.prompt.slice(0, 25)}...</h3>
+                                            <div className="flex items-center justify-between">
+                                                <span className="text-gallery-secondary text-[10px] uppercase tracking-widest">{image.status}</span>
+                                                <div className="flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity delay-100">
+                                                    <button className="size-8 flex items-center justify-center rounded-full bg-white text-black hover:bg-gray-200"><span className="material-symbols-outlined text-sm">arrow_outward</span></button>
+                                                </div>
                                             </div>
                                         </div>
                                     </div>
                                 </div>
+                            ))
+                        ) : (
+                            <div className="col-span-full text-center py-20">
+                                <p className="text-gallery-secondary text-sm">No images yet</p>
+                                <p className="text-gallery-secondary/50 text-xs mt-2">Generate images in the AI Studio</p>
                             </div>
-                        ))}
+                        )}
                     </div>
 
                     <div className="flex justify-center mt-20">

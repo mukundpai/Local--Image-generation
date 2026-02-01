@@ -1,8 +1,42 @@
+'use client';
+
 import React from 'react';
 import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
+import { trpc } from '@/lib/trpc/client';
+
+const INFLUENCER_ID = 'sara-influencer-001';
 
 export default function InfluencerPage() {
+    // Fetch real analytics data
+    const { data: analytics, isLoading: analyticsLoading } = trpc.analytics.getDashboard.useQuery({
+        influencerId: INFLUENCER_ID,
+    });
+
+    // Fetch recent generated images
+    const { data: recentImages } = trpc.images.getHistory.useQuery({
+        influencerId: INFLUENCER_ID,
+        limit: 4,
+    });
+
+    // Fetch upcoming scheduled posts
+    const { data: upcomingPosts } = trpc.posts.list.useQuery({
+        influencerId: INFLUENCER_ID,
+        status: 'SCHEDULED',
+    });
+
+    const formatNumber = (num: number | undefined) => {
+        if (!num) return '0';
+        if (num >= 1000) return `${(num / 1000).toFixed(1)}k`;
+        return num.toString();
+    };
+
+    const formatDate = (date: Date) => {
+        const d = new Date(date);
+        const day = d.getDate();
+        const label = d.toLocaleDateString('en-US', { weekday: 'short' });
+        return { day: day.toString(), label };
+    };
     return (
         <div className="bg-background-dark font-sans text-dash-text-main overflow-hidden h-screen flex selection:bg-dash-primary selection:text-black">
             {/* Background Effects */}
@@ -123,7 +157,7 @@ export default function InfluencerPage() {
                                         <span className="text-green-700 text-[10px] font-mono font-bold border border-green-700/20 bg-green-700/5 px-1.5 py-0.5">+12%</span>
                                     </div>
                                     <div className="flex items-baseline gap-2 mt-2">
-                                        <p className="text-dash-text-main text-5xl font-serif font-light">12.4k</p>
+                                        <p className="text-dash-text-main text-5xl font-serif font-light">{formatNumber(analytics?.followers)}</p>
                                         <span className="text-text-muted text-xs font-serif italic">total</span>
                                     </div>
                                 </Card>
@@ -133,7 +167,7 @@ export default function InfluencerPage() {
                                         <span className="text-blue-400 text-[10px] font-mono font-bold border border-blue-400/20 bg-blue-400/5 px-1.5 py-0.5">+2.1%</span>
                                     </div>
                                     <div className="flex items-baseline gap-2 mt-2">
-                                        <p className="text-dash-text-main text-5xl font-serif font-light">4.8%</p>
+                                        <p className="text-dash-text-main text-5xl font-serif font-light">{analytics?.engagementRate ? `${(analytics.engagementRate * 100).toFixed(1)}%` : '0%'}</p>
                                         <span className="text-text-muted text-xs font-serif italic">rate</span>
                                     </div>
                                 </Card>
@@ -150,28 +184,25 @@ export default function InfluencerPage() {
                                     <a href="#" className="text-[10px] uppercase tracking-widest text-text-muted hover:text-dash-primary flex items-center gap-1">View Archive <span className="material-symbols-outlined text-sm">arrow_forward</span></a>
                                 </div>
                                 <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                                    {[
-                                        { status: 'Draft', color: 'text-dash-primary', url: 'https://lh3.googleusercontent.com/aida-public/AB6AXuA_-Cel15tCTCTMmEHohzw3pTKBeayaNdUqWxXhvpmw7GSuhwnYtjovXs9FSZQNzuzviCf_715YPru9Fl_Gpxsa0Wg83307TxOitsOa_QqlJL4d5L-RWLyPIeU4cZqh26b8xLknWjtoVUzPnrzCTbVElan-NpqBp9F93hDdlQD9iCYRRP4uif5RvV5NHEy1MxFGl3M403etevELd7auCmSoFWkuzdnfZovwE2g6WexUiFva1Y1QnEI28SqWhNvpoeq4361YW0OIcxOG' },
-                                        { status: 'Ready', color: 'text-green-700', url: 'https://lh3.googleusercontent.com/aida-public/AB6AXuCzBvM2D6FU2u9yaXomQJidXrh5Z4R8lI63URyAypnTcEkJyYXipw-Jv7nYDQS_-Q9AKk3bh-jyeTKaEmEzFWE2ZLltpjwUtTJBAJtd3zsHmiI-NwzA53vG63Q-42uhfCSjjZtsbv9y404Z6IkfO4lxtB4FaLe1Ti6MiwkKTxPodNPTNuhBHPUcSejzzP_56pLHGtXKqq81bF9OHjklSi8G1pHRI5QfTxDorZzMCd0FxcPB0CG7HHZqaWBtKePoxFoPc96NY-Ot1knd' },
-                                        { status: 'Queued', color: 'text-blue-400', url: 'https://lh3.googleusercontent.com/aida-public/AB6AXuBSYPleU83Adcu8N8d96Dv0KUMLB0L5uuvB3P5n49MYeTtzbaW2g0Kyh8TanpBQbQUyzb2N6HLnXjpJSW5rJcXJ_ST6goEO53BCTiuUea-GGoqE6ZqopO5nfSO5jruUPfvqy8ZFheQ8o8PIiogE5beH1TFUohZzHpwozNKC7WH5WtRtSmMYyTSJOMCMWTTzfjm-YpEnNofFwGwKpvTnNoFqciyGpUtJtR0u_Bz04clD8HWEJc8HVI51Tu2TxU7ZYNdM-W7BL2eG3it2' }
-                                    ].map((item, i) => (
-                                        <div key={i} className="group relative aspect-[3/4] overflow-hidden border border-dash-border bg-dash-card cursor-pointer shadow-vintage">
-                                            <div className="absolute inset-0 bg-cover bg-center grayscale transition-all duration-700 group-hover:grayscale-0 group-hover:scale-105 opacity-80 group-hover:opacity-100" style={{ backgroundImage: `url('${item.url}')` }}></div>
+                                    {recentImages?.images.slice(0, 3).map((image: any, i: number) => (
+                                        <div key={image.id} className="group relative aspect-[3/4] overflow-hidden border border-dash-border bg-dash-card cursor-pointer shadow-vintage">
+                                            <div className="absolute inset-0 bg-cover bg-center grayscale transition-all duration-700 group-hover:grayscale-0 group-hover:scale-105 opacity-80 group-hover:opacity-100" style={{ backgroundImage: `url('${image.imageUrl}')` }}></div>
                                             <div className="absolute top-2 right-2 z-10">
-                                                <span className={`px-1.5 py-0.5 bg-black/80 ${item.color} border border-current/30 text-[9px] font-mono font-bold uppercase tracking-widest backdrop-blur-md`}>{item.status}</span>
+                                                <span className="px-1.5 py-0.5 bg-black/80 text-green-700 border border-current/30 text-[9px] font-mono font-bold uppercase tracking-widest backdrop-blur-md">{image.status}</span>
                                             </div>
                                             <div className="absolute inset-x-0 bottom-0 translate-y-full group-hover:translate-y-0 transition-transform duration-300 z-10">
-                                                <button className={`w-full py-3 bg-dash-card/95 border-t border-current/30 ${item.color} text-[10px] uppercase font-bold tracking-[0.2em] font-sans hover:bg-white/10`}>View</button>
+                                                <button className="w-full py-3 bg-dash-card/95 border-t border-current/30 text-green-700 text-[10px] uppercase font-bold tracking-[0.2em] font-sans hover:bg-white/10">View</button>
                                             </div>
                                         </div>
-                                    ))}
+                                    )) || []}
                                     {/* Processing Placeholder */}
-                                    <div className="relative aspect-[3/4] overflow-hidden border border-dash-border bg-[#0a0a0a] flex flex-col items-center justify-center text-center p-4 shadow-inner">
-                                        <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_center,_var(--tw-gradient-stops))] from-white/5 to-transparent"></div>
-                                        <div className="size-8 border border-t-dash-primary border-r-dash-primary/50 border-b-transparent border-l-transparent animate-spin mb-4 rounded-full"></div>
-                                        <p className="text-dash-text-main text-[10px] uppercase tracking-widest font-bold">Processing</p>
-                                        <p className="text-text-muted font-mono text-[9px] mt-1">Batch 4.2-B</p>
-                                    </div>
+                                    {(!recentImages || recentImages.images.length < 4) && (
+                                        <div className="relative aspect-[3/4] overflow-hidden border border-dash-border bg-[#0a0a0a] flex flex-col items-center justify-center text-center p-4 shadow-inner">
+                                            <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_center,_var(--tw-gradient-stops))] from-white/5 to-transparent"></div>
+                                            <p className="text-dash-text-main text-[10px] uppercase tracking-widest font-bold">No Images Yet</p>
+                                            <p className="text-text-muted font-mono text-[9px] mt-1">Start Generating</p>
+                                        </div>
+                                    )}
                                 </div>
                             </div>
 
@@ -184,22 +215,30 @@ export default function InfluencerPage() {
                                     <button className="size-7 border border-dash-border hover:bg-white/5 flex items-center justify-center text-text-muted transition-colors rounded-sm"><span className="material-symbols-outlined text-base">add</span></button>
                                 </div>
                                 <div className="bg-dash-card border border-dash-border flex flex-col shadow-vintage">
-                                    {[
-                                        { day: '24', label: 'Today', title: 'Brand Collab: Nike', time: '10:00 AM • Story + Post', highlight: true },
-                                        { day: '25', label: 'Fri', title: 'Weekend Vibes', time: '2:00 PM • Reel', highlight: false }
-                                    ].map((item, i) => (
-                                        <div key={i} className="flex gap-4 p-5 border-b border-dash-border hover:bg-white/5 cursor-pointer group relative overflow-hidden">
-                                            {item.highlight && <div className="absolute left-0 top-0 bottom-0 w-0.5 bg-dash-primary"></div>}
-                                            <div className="flex flex-col items-center justify-center min-w-[3.5rem] border-r border-dash-border pr-5">
-                                                <span className={`text-[9px] font-mono font-bold uppercase tracking-widest ${item.highlight ? 'text-dash-primary' : 'text-text-muted'}`}>{item.label}</span>
-                                                <span className="text-dash-text-main text-3xl font-serif leading-none mt-1">{item.day}</span>
-                                            </div>
-                                            <div className="flex flex-col justify-center">
-                                                <p className={`text-sm font-bold leading-tight font-sans tracking-wide ${item.highlight ? 'text-dash-text-main group-hover:text-dash-primary' : 'text-dash-text-main'}`}>{item.title}</p>
-                                                <p className="text-text-muted text-[10px] font-mono uppercase tracking-wider mt-1.5 opacity-70">{item.time}</p>
-                                            </div>
+                                    {upcomingPosts && upcomingPosts.length > 0 ? (
+                                        upcomingPosts.slice(0, 2).map((post: any, i: number) => {
+                                            const { day, label } = formatDate(post.scheduledTime);
+                                            const isToday = new Date(post.scheduledTime).toDateString() === new Date().toDateString();
+                                            return (
+                                                <div key={post.id} className="flex gap-4 p-5 border-b border-dash-border hover:bg-white/5 cursor-pointer group relative overflow-hidden">
+                                                    {isToday && <div className="absolute left-0 top-0 bottom-0 w-0.5 bg-dash-primary"></div>}
+                                                    <div className="flex flex-col items-center justify-center min-w-[3.5rem] border-r border-dash-border pr-5">
+                                                        <span className={`text-[9px] font-mono font-bold uppercase tracking-widest ${isToday ? 'text-dash-primary' : 'text-text-muted'}`}>{label}</span>
+                                                        <span className="text-dash-text-main text-3xl font-serif leading-none mt-1">{day}</span>
+                                                    </div>
+                                                    <div className="flex flex-col justify-center">
+                                                        <p className={`text-sm font-bold leading-tight font-sans tracking-wide ${isToday ? 'text-dash-text-main group-hover:text-dash-primary' : 'text-dash-text-main'}`}>{post.caption.slice(0, 30)}...</p>
+                                                        <p className="text-text-muted text-[10px] font-mono uppercase tracking-wider mt-1.5 opacity-70">{new Date(post.scheduledTime).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })}</p>
+                                                    </div>
+                                                </div>
+                                            );
+                                        })
+                                    ) : (
+                                        <div className="p-8 text-center">
+                                            <p className="text-text-muted text-xs font-mono uppercase">No scheduled posts</p>
+                                            <p className="text-text-muted/50 text-[10px] mt-1">Create a post to get started</p>
                                         </div>
-                                    ))}
+                                    )}
                                 </div>
                             </div>
                         </div>

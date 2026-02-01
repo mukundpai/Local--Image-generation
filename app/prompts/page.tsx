@@ -1,9 +1,62 @@
-import React from 'react';
+'use client';
+
+import React, { useState } from 'react';
 import { Button } from '@/components/ui/Button';
 import { Textarea } from '@/components/ui/Textarea';
 import { Card } from '@/components/ui/Card';
+import { trpc } from '@/lib/trpc/client';
+
+const INFLUENCER_ID = 'sara-influencer-001';
 
 export default function PromptsPage() {
+    const [inputPrompt, setInputPrompt] = useState('Drinking coffee in neon rain');
+    const [negativePrompt, setNegativePrompt] = useState('blurry, cartoon, 3d render, disfigured, bad anatomy, text, watermark');
+    const [compiledPrompt, setCompiledPrompt] = useState('');
+
+    // Fetch saved prompt templates
+    const { data: savedPrompts, refetch } = trpc.prompts.list.useQuery({
+        influencerId: INFLUENCER_ID,
+        isTemplate: true,
+    });
+
+    // Save template mutation
+    const saveTemplateMutation = trpc.prompts.save.useMutation({
+        onSuccess: () => {
+            refetch();
+        },
+    });
+
+    // Compile the prompt with context
+    const compilePrompt = () => {
+        const base = 'photo of a woman with pink bob hair :: wearing streetwear :: ';
+        const suffix = ' :: highly detailed, 8k, photorealistic :: --v 5.2 --style raw --ar 4:5';
+        const compiled = base + inputPrompt + suffix;
+        setCompiledPrompt(compiled);
+        return compiled;
+    };
+
+    // Save current prompt as template
+    const handleSaveTemplate = () => {
+        const compiled = compilePrompt();
+        saveTemplateMutation.mutate({
+            influencerId: INFLUENCER_ID,
+            basePrompt: inputPrompt,
+            compiledPrompt: compiled,
+            context: negativePrompt,
+            isTemplate: true,
+        });
+    };
+
+    // Load a saved template
+    const handleLoadTemplate = (template: any) => {
+        setInputPrompt(template.basePrompt);
+        if (template.context) {
+            setNegativePrompt(template.context);
+        }
+        if (template.compiledPrompt) {
+            setCompiledPrompt(template.compiledPrompt);
+        }
+    };
     return (
         <div className="bg-term-bg text-term-text font-terminal overflow-hidden h-screen flex flex-col antialiased selection:bg-term-accent selection:text-black">
             <div className="crt-overlay"></div>
@@ -92,7 +145,11 @@ export default function PromptsPage() {
                                     variant="terminal"
                                     className="border-b border-term-border text-lg pl-6 font-terminal placeholder:text-text-muted/30 min-h-[4rem]"
                                     placeholder="Enter prompt sequence..."
-                                    defaultValue="Drinking coffee in neon rain"
+                                    value={inputPrompt}
+                                    onChange={(e) => {
+                                        setInputPrompt(e.target.value);
+                                        compilePrompt();
+                                    }}
                                 />
                                 <div className="absolute bottom-0 right-0 w-2 h-2 border-r border-b border-term-accent opacity-0 group-hover:opacity-100 transition-opacity"></div>
                             </div>
@@ -146,30 +203,31 @@ export default function PromptsPage() {
                         <button className="text-[10px] text-text-muted hover:text-term-text uppercase">[EXPAND]</button>
                     </div>
                     <div className="flex-1 overflow-y-auto">
-                        {[
-                            { id: 'ID_4092', time: '00:02:00 ago', prompt: '> Eating ramen at a stall...', img: 'https://lh3.googleusercontent.com/aida-public/AB6AXuDLMPbLHWVlKhT0LIqv0_aCKuVTWPpIUb5w8JPnXMRe89Y2aSj37PDSnPQSJxyzlnov4CUOX_sIM0lhqheVG6SI7qdpE4mXPqxr0RQ_Wa3TLUDW_pvgnTeVfKnrudOLauirwxtcGhhTr79mHx2L7d1iqkgP67KarqG7JQbHyI2YX1tvCan80rohabPQBenMIrHVmhzirt4InftRl31b_JrvtGh67MzrP3nnjATJZwaUCg-CuykqH8UVPjKpwLBBx8s1o6DVu46_rbFt' },
-                            { id: 'ID_4091', time: '00:15:00 ago', prompt: '> Waiting for train...', img: 'https://lh3.googleusercontent.com/aida-public/AB6AXuD0afIFI7Cq6kRLIQ1ra1q4idhQzgXy47Gn-3Lx0kOtS8u6-kXmqLibyOsLE1dHM1ELrk2sAw2hT-VkLGFL-7FuksIIZ27Z0rsK8hZoACLA80YICBkIfRBepDui0jBgIwrNA_rghTo9dtHvX6ZtYehIfj6yUL7d4lgweKvIH78e4lAUahd8iCHBhtOyrcVHhxzBzMVETMb_i-nkFsUX_9QKXum8EMrXu4QAZjQuTLfL22Y455WfY3NmIiSYFa_-_3nGjBn7tcjl1WCs' },
-                            { id: 'ID_4090', time: '01:00:00 ago', prompt: '> Walking in Shibuya...', img: 'https://lh3.googleusercontent.com/aida-public/AB6AXuAgLalJuM-lCtu9TDG8ea2Dfzx_wcR4Y8VIh5RXGQA2bBcUIDmxuA56GPHFy_P8WKF0tHuN9kqfMnwF9nt3HEq8HxvsuRuaFJ6CaLNSKRxzXCXFxapZO_Q1XGtdpZ0U-Ja7JZoWrSJRYuzbX07wv_akXw0sBK-OKwzRt_dLYt69OL5z2bSoJGduGqfh02csV5m69vsqholsnc3qNQQR6RrfEwHPKQ2zQaZFCFaqByGAUtzoZQzVw54pZIJKYWAAhEVjG8RHz99eClpo' }
-                        ].map((item, i) => (
-                            <div key={i} className="group border-b border-term-border p-4 hover:bg-term-surface transition-colors cursor-pointer">
-                                <div className="flex justify-between items-start mb-2">
-                                    <span className="text-[10px] font-mono text-term-accent">{item.id}</span>
-                                    <span className="text-[10px] font-mono text-text-muted">{item.time}</span>
-                                </div>
-                                <div className="flex gap-3">
-                                    <div className="size-12 shrink-0 border border-term-border bg-center bg-cover grayscale opacity-70 group-hover:opacity-100 transition-all" style={{ backgroundImage: `url('${item.img}')` }}></div>
-                                    <div className="flex-1 min-w-0">
-                                        <p className="text-[10px] font-terminal text-term-text truncate leading-tight mb-1">{item.prompt}</p>
-                                        <div className="flex gap-2">
-                                            <span className="text-[9px] border border-term-border px-1 text-text-muted">--ar 4:5</span>
+                        {savedPrompts && savedPrompts.length > 0 ? (
+                            savedPrompts.map((prompt: any, i: number) => (
+                                <div key={prompt.id} className="group border-b border-term-border p-4 hover:bg-term-surface transition-colors cursor-pointer" onClick={() => handleLoadTemplate(prompt)}>
+                                    <div className="flex justify-between items-start mb-2">
+                                        <span className="text-[10px] font-mono text-term-accent">ID_{prompt.id.slice(-4).toUpperCase()}</span>
+                                        <span className="text-[10px] font-mono text-text-muted">{new Date(prompt.createdAt).toLocaleDateString()}</span>
+                                    </div>
+                                    <div className="flex gap-3">
+                                        <div className="flex-1 min-w-0">
+                                            <p className="text-[10px] font-terminal text-term-text truncate leading-tight mb-1">&gt; {prompt.basePrompt.slice(0, 40)}...</p>
+                                            <div className="flex gap-2">
+                                                <span className="text-[9px] border border-term-border px-1 text-text-muted">Uses: {prompt.usageCount}</span>
+                                            </div>
                                         </div>
                                     </div>
                                 </div>
+                            ))
+                        ) : (
+                            <div className="p-4 text-center">
+                                <p className="text-text-muted text-xs font-mono">No saved templates</p>
                             </div>
-                        ))}
+                        )}
                         <div className="p-4">
-                            <div className="border border-dashed border-term-border p-3 text-center hover:border-term-accent group cursor-pointer transition-colors">
-                                <span className="text-[10px] font-mono text-text-muted group-hover:text-term-accent uppercase">Load_More_Entries()</span>
+                            <div className="border border-dashed border-term-border p-3 text-center hover:border-term-accent group cursor-pointer transition-colors" onClick={handleSaveTemplate}>
+                                <span className="text-[10px] font-mono text-text-muted group-hover:text-term-accent uppercase">Save_Current_Template()</span>
                             </div>
                         </div>
                     </div>
